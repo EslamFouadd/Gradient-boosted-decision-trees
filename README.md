@@ -5,5 +5,3 @@
 ![1](https://github.com/EslamFouadd/Gradient-boosted-decision-trees/assets/77150715/88903d90-c66f-4fcd-8f74-938ea621eb80)
 
 ![4](https://github.com/EslamFouadd/Gradient-boosted-decision-trees/assets/77150715/4ccc55a0-0a86-4377-9134-e6a5af2ffa25)
-
-![Uploading 2.png…]()
