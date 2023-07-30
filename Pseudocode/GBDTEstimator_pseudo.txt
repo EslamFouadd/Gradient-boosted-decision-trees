@@ -1,0 +1,99 @@
+DEFINE CLASS GBDTEstimator:
+
+
+
+    DEFINE FUNCTION __init__(self, params: dict):
+
+        SET self.params: dict TO params
+
+        SET self.trees: List[Tree] TO []
+
+
+
+        # parameters
+
+        SET self.n_round: int TO params.get("n_round")
+
+        SET self.eta: float TO params.get("eta")
+
+
+
+    DEFINE FUNCTION calc_grad(self, y_true: np.ndarray, y_pred: np.ndarray) \
+
+            -> Tuple[np.ndarray, np.ndarray]:
+
+        PASS
+
+
+
+    DEFINE FUNCTION fit(self, x: np.ndarray, y: np.ndarray):
+
+        SET data TO Data(x, y)
+
+        self._fit(data)
+
+
+
+    DEFINE FUNCTION _fit(self, data: Data):
+
+        SET pred TO np.zeros(len(data.values))
+
+        FOR round IN range(self.n_round):
+
+            logger.info(f"construct tree[{round}] --------------------")
+
+            SET grad, hess TO self.calc_grad(data.target, pred)
+
+            SET tree TO Tree(self.params)
+
+            tree.construct(data, grad, hess)
+
+            self.trees.append(tree)
+
+            # NOTE: predict only last tree
+
+            pred += self._predict_last_tree(data)
+
+
+
+    DEFINE FUNCTION predict(self, x: np.ndarray) -> np.ndarray:
+
+        SET data TO Data(x, None)
+
+        RETURN self._predict(data)
+
+
+
+    DEFINE FUNCTION _predict(self, data: Data) -> np.ndarray:
+
+        SET pred TO np.zeros(len(data.values))
+
+        FOR tree IN self.trees:
+
+            pred += tree.predict(data.values) * self.eta
+
+        RETURN pred
+
+
+
+    DEFINE FUNCTION _predict_last_tree(self, data: Data) -> np.ndarray:
+
+        assert(len(self.trees) > 0)
+
+        SET tree TO self.trees[-1]
+
+        RETURN tree.predict(data.values) * self.eta
+
+
+
+    DEFINE FUNCTION dump_model(self) -> str:
+
+        SET ret TO []
+
+        FOR i, tree IN enumerate(self.trees):
+
+            ret.append(f"booster[{i}]")
+
+            ret.append(tree.dump())
+
+        RETURN "\n".join(ret)

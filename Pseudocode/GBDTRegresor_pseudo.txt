@@ -1,0 +1,13 @@
+DEFINE CLASS GBDTRegressor(GBDTEstimator):
+
+
+
+    DEFINE FUNCTION calc_grad(self, y_true: np.ndarray, y_pred: np.ndarray) \
+
+            -> Tuple[np.ndarray, np.ndarray]:
+
+        SET grad TO y_pred - y_true
+
+        SET hess TO np.ones(len(y_true))
+
+        RETURN grad, hess
