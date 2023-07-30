@@ -1,0 +1,328 @@
+DEFINE CLASS Tree:
+
+    DEFINE FUNCTION __init__(self, params: dict):
+
+        SET self.params: dict TO params
+
+        SET self.nodes: List[Node] TO []
+
+        // parameters
+
+        SET self.max_depth: int TO params.get("max_depth")
+
+        // add initial node
+
+        SET node TO Node(0, 0.0)
+
+        self.nodes.append(node)
+    ENDFUNCTION
+
+    DEFINE FUNCTION construct(self, data: Data, grad: np.ndarray, hess: np.ndarray):
+
+        // data
+
+        assert (data.sorted_indexes is not None)
+
+        SET n TO len(data.values)
+
+        SET values TO data.values
+
+        SET sorted_indexes TO data.sorted_indexes
+
+        // node ids records belong to
+
+        SET node_ids_data TO np.zeros(n, dtype=int)
+
+        // [comment with [] is important FOR understanding]
+
+        // [for each depth]
+
+        FOR depth IN range(self.max_depth):
+
+            // node ids IN the depth
+
+            SET node_ids_depth TO TreeUtil.node_ids_depth(depth)
+
+
+            // [1. find best split]
+
+            // split information FOR each node
+
+            SET feature_ids, feature_values TO [], []
+
+            SET left_weights, right_weights TO [], []
+
+            // [for each node]
+
+            FOR node_id IN node_ids_depth:
+
+                SET node TO self.nodes[node_id]
+
+                // logger.debug(f"{node_id}: find split -----")
+
+                // [calculate sum grad and hess of records IN the node]
+
+                SET sum_grad, sum_hess TO 0.0, 0.0
+
+                FOR i IN range(n):
+
+                    IF node_ids_data[i] != node_id:
+
+                        continue
+
+                    sum_grad += grad[i]
+
+                    sum_hess += hess[i]
+
+
+
+                // [initialize best gain (set as all directed to left)]
+
+                SET best_gain, best_feature_id, best_feature_value TO 0.0, 0, -np.inf
+
+                SET best_left_weight, best_right_weight TO node.weight, 0.0
+
+                IF sum_hess > 0:
+
+                    SET sum_loss TO TreeUtil.loss(sum_grad, sum_hess)
+
+                ELSE:
+
+                    SET sum_loss TO 0.0
+
+
+
+                // logger.debug(f"sum grad:{sum_grad} hess:{sum_hess} loss:{sum_loss}")
+
+
+
+                // [for each feature]
+
+                FOR feature_id IN range(data.values.shape[1]):
+
+                    SET prev_value TO -np.inf
+                    
+                    // [have gradients/hessian of left child records(value of record < value of split)]
+
+                    SET left_grad, left_hess TO 0.0, 0.0
+
+                    SET sorted_index TO sorted_indexes[:, feature_id]
+
+                    // [for each sorted record]
+
+                    FOR i IN sorted_index:
+
+                        // skip IF the record does not belong to the node
+
+                        // NOTE: this calculation is redundant and inefficient.
+
+                        IF node_ids_data[i] != node_id:
+
+                            continue
+
+                        SET value TO values[i, feature_id]
+
+
+
+                        // [evaluate split, IF split can be made at the record]
+
+                        IF value != prev_value and left_hess > 0 and (sum_hess - left_hess) > 0:                            
+
+                            // [calculate loss of the split using gradient and hessian]
+
+                            SET right_grad TO sum_grad - left_grad
+
+                            SET right_hess TO sum_hess - left_hess
+
+                            SET left_loss TO TreeUtil.loss(left_grad, left_hess)
+
+                            SET right_loss TO TreeUtil.loss(right_grad, right_hess)
+
+                            IF left_loss is not None and right_loss is not None:
+
+                                SET gain TO sum_loss - (left_loss + right_loss)
+
+                                // logger.debug(f"'feature{feature_id} < {value}' " +
+
+                                //       f"lg:{left_grad:.3f} lh:{left_hess:.3f} rg:{right_grad:.3f} rh:{right_hess:.3f} " +
+
+                                //       f"ll:{left_loss:.3f} rl:{right_loss:.3f} gain:{gain:.3f}")
+
+                                
+
+                                // [update IF the gain is better than current best gain]
+
+                                IF gain > best_gain:
+
+                                    SET best_gain TO gain
+
+                                    SET best_feature_id TO feature_id
+
+                                    SET best_feature_value TO value
+
+                                    SET best_left_weight TO TreeUtil.weight(left_grad, left_hess)
+
+                                    SET best_right_weight TO TreeUtil.weight(right_grad, right_hess)
+
+
+                        SET prev_value TO value
+
+                        left_grad += grad[i]
+
+                        left_hess += hess[i]
+
+
+
+                // logger.debug(f"node_id:{node_id} split - 'feature{best_feature_id} < {best_feature_value}'")
+
+                feature_ids.append(best_feature_id)
+
+                feature_values.append(best_feature_value)
+
+                left_weights.append(best_left_weight)
+
+                right_weights.append(best_right_weight)
+
+
+
+            // [2. update nodes and create new nodes] ----------
+
+            FOR i IN range(len(node_ids_depth)):
+
+                SET node_id TO node_ids_depth[i]
+
+                SET feature_id TO feature_ids[i]
+
+                SET feature_value TO feature_values[i]
+
+                SET left_weight TO left_weights[i]
+
+                SET right_weight TO right_weights[i]
+
+
+
+                // update current node
+
+                SET node TO self.nodes[node_id]
+
+                SET node.feature_id TO feature_id
+
+                SET node.feature_value TO feature_value
+
+
+
+                // create new nodes
+
+                SET left_node TO Node(TreeUtil.left_child_id(node_id), left_weight)
+
+                SET right_node TO Node(TreeUtil.right_child_id(node_id), right_weight)
+
+                self.nodes += [left_node, right_node]
+
+
+
+            // [3. update node ids of records] ----------
+
+            FOR i IN range(len(node_ids_data)):
+
+                # directed by split
+
+                SET node_id TO node_ids_data[i]
+
+                SET node TO self.nodes[node_id]
+
+                SET feature_id, feature_value TO node.feature_id, node.feature_value
+
+               // update
+
+                SET is_left TO values[i, feature_id] < feature_value
+
+                IF is_left:
+
+                    SET next_node_id TO TreeUtil.left_child_id(node_id)
+
+                ELSE:
+
+                    SET next_node_id TO TreeUtil.right_child_id(node_id)
+
+                SET node_ids_data[i] TO next_node_id
+
+    ENDFUNCTION
+
+    DEFINE FUNCTION predict(self, x: np.ndarray) -> np.ndarray:
+
+        SET values TO x
+
+        // node ids records belong to
+
+        SET node_ids_data TO np.zeros(len(values), dtype=int)
+
+
+        FOR depth IN range(self.max_depth):
+
+            FOR i IN range(len(node_ids_data)):
+
+                # directed by split
+
+                SET node_id TO node_ids_data[i]
+
+                SET node TO self.nodes[node_id]
+
+                SET feature_id, feature_value TO node.feature_id, node.feature_value
+
+
+
+                // update
+
+                IF feature_id is None:
+
+                    SET next_node_id TO node_id
+
+                ELSEIF values[i, feature_id] < feature_value:
+
+                    SET next_node_id TO TreeUtil.left_child_id(node_id)
+
+                ELSE:
+
+                    SET next_node_id TO TreeUtil.right_child_id(node_id)
+
+                SET node_ids_data[i] TO next_node_id
+
+
+
+        SET weights TO np.array([self.nodes[node_id].weight FOR node_id IN node_ids_data])
+
+
+
+        RETURN weights
+
+    ENDFUNCTION
+
+    DEFINE FUNCTION dump(self) -> str:
+
+        """dump tree information"""
+
+        SET ret TO []
+
+        FOR depth IN range(self.max_depth + 1):
+
+            SET node_ids_depth TO TreeUtil.node_ids_depth(depth)
+
+            FOR node_id IN node_ids_depth:
+
+                SET node TO self.nodes[node_id]
+
+                IF node.is_leaf():
+
+                    ret.append(f"{node_id}:leaf={node.weight}")
+
+                ELSE:
+
+                    ret.append(
+
+                        f"{node_id}:[f{node.feature_id}<{node.feature_value}] " +
+
+                        f"yes={TreeUtil.left_child_id(node_id)},no={TreeUtil.right_child_id(node_id)}")
+
+        RETURN "\n".join(ret)
+    ENDFUNCTION

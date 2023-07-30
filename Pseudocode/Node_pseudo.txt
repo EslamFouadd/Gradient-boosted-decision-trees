@@ -1,0 +1,22 @@
+DEFINE CLASS Node:
+
+    DEFINE FUNCTION __init__(self, id: int, weight: float):
+
+        SET self.id: int TO id
+
+        // note: necessary only FOR leaf node
+
+        SET self.weight: float TO weight
+
+        // split information
+
+        SET self.feature_id: int TO None
+
+        SET self.feature_value: float TO None
+    ENDFUNCTION
+
+
+    DEFINE FUNCTION is_leaf(self) -> bool:
+
+        RETURN self.feature_id is None
+    ENDFUNCTION

@@ -1,0 +1,47 @@
+DEFINE CLASS TreeUtil:
+
+    @classmethod
+
+    DEFINE FUNCTION left_child_id(cls, id: int) -> int:
+
+        """node id of left child"""
+
+        RETURN id * 2 + 1
+    ENDFUNCTION
+
+
+    @classmethod
+    DEFINE FUNCTION right_child_id(cls, id: int) -> int:
+
+        """node id of right child"""
+
+        RETURN id * 2 + 2
+    ENDFUNCTION
+
+    @classmethod
+    DEFINE FUNCTION loss(cls, sum_grad: float, sum_hess: float) -> Optional[float]:
+
+        IF np.isclose(sum_hess, 0.0, atol=1.e-8):
+
+            RETURN None
+
+        RETURN -0.5 * (sum_grad ** 2.0) / sum_hess
+     ENDFUNCTION
+
+
+    @classmethod
+    DEFINE FUNCTION weight(cls, sum_grad: float, sum_hess: float) -> Optional[float]:
+
+        IF np.isclose(sum_hess, 0.0, atol=1.e-8):
+
+            RETURN None
+
+        RETURN -1.0 * sum_grad / sum_hess
+    ENDFUNCTION
+
+
+    @classmethod
+    DEFINE FUNCTION node_ids_depth(self, d: int) -> List[int]:
+
+        RETURN list(range(2 ** d - 1, 2 ** (d + 1) - 1))
+    ENDFUNCTION

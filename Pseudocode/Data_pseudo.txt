@@ -1,0 +1,20 @@
+DEFINE CLASS Data:
+
+    DEFINE FUNCTION __init__(self, x: np.ndarray, y: Optional[np.ndarray]):
+
+        SET self.values: np.array TO x
+
+        SET self.target: Optional[np.array] TO y
+
+        SET self.sorted_indexes: Optional[np.array] TO None
+
+        // sort index FOR each feature
+        // note: necessary only FOR training
+
+        SET sorted_indexes TO []
+
+        FOR feature_id IN range(self.values.shape[1]):
+            sorted_indexes.append(np.argsort(self.values[:, feature_id]))
+	NEXT
+        SET self.sorted_indexes TO np.array(sorted_indexes).T
+     ENDFUNCTION
